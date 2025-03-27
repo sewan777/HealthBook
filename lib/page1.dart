@@ -4,10 +4,6 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:table_calendar/table_calendar.dart';
 
-void main() {
-  runApp(HealthApp());
-}
-
 class HealthApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
