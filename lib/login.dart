@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'signup.dart';
 import 'page1.dart';
-
-
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -32,6 +31,40 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  final SupabaseClient supabase = Supabase.instance.client;
+
+  Future<void> _login() async {
+    try {
+      final response = await supabase.auth.signInWithPassword(
+        email: _emailController.text,
+        password: _passwordController.text,
+      );
+      if (response.user != null) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => HealthApp()),
+        );
+      }
+    } catch (error) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Login failed: $error')));
+    }
+  }
+
+  Future<void> _googleSignInFunction() async {
+    try {
+      final response = await supabase.auth.signInWithOAuth(OAuthProvider.google);
+      if (supabase.auth.currentSession != null) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => HealthApp()),
+        );
+      }
+    } catch (error) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Google Sign-In failed: $error')));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -50,11 +83,8 @@ class _LoginPageState extends State<LoginPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Logo
                 Image.asset('assets/logo.jpeg', width: 200, height: 120),
                 const SizedBox(height: 20),
-
-                // Title
                 Text(
                   "Calorie Tracker",
                   style: GoogleFonts.lato(
@@ -63,17 +93,7 @@ class _LoginPageState extends State<LoginPage> {
                     color: Colors.white,
                   ),
                 ),
-                const SizedBox(height: 10),
-                Text(
-                  "Track your calories & stay fit",
-                  style: GoogleFonts.lato(
-                    fontSize: 16,
-                    color: Colors.white70,
-                  ),
-                ),
                 const SizedBox(height: 30),
-
-                // Email Input
                 TextField(
                   controller: _emailController,
                   decoration: InputDecoration(
@@ -91,8 +111,6 @@ class _LoginPageState extends State<LoginPage> {
                   style: const TextStyle(color: Colors.white),
                 ),
                 const SizedBox(height: 15),
-
-                // Password Input
                 TextField(
                   controller: _passwordController,
                   decoration: InputDecoration(
@@ -110,17 +128,8 @@ class _LoginPageState extends State<LoginPage> {
                   style: const TextStyle(color: Colors.white),
                 ),
                 const SizedBox(height: 20),
-
-                // Login Button
                 ElevatedButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => HealthApp()),
-                      );
-                    },
-
+                  onPressed: _login,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.orange,
                     shape: RoundedRectangleBorder(
@@ -134,8 +143,23 @@ class _LoginPageState extends State<LoginPage> {
                     style: TextStyle(fontSize: 18, color: Colors.white),
                   ),
                 ),
-
-                // Sign Up Option
+                const SizedBox(height: 15),
+                ElevatedButton.icon(
+                  onPressed: _googleSignInFunction,
+                  icon: const Icon(Icons.login, color: Colors.white),
+                  label: const Text(
+                    "Sign in with Google",
+                    style: TextStyle(fontSize: 18, color: Colors.white),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 40, vertical: 15),
+                  ),
+                ),
                 const SizedBox(height: 15),
                 TextButton(
                   onPressed: () {

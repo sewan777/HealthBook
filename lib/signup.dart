@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'login.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'login.dart'; // Make sure to import the LoginPage here
 
 class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key});
@@ -14,6 +15,51 @@ class _SignUpPageState extends State<SignUpPage> {
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController = TextEditingController();
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  bool isLoading = false;
+
+  Future<void> signUp() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      isLoading = true;
+    });
+
+    try {
+      // SignUp request to Supabase
+      final AuthResponse response = await Supabase.instance.client.auth.signUp(
+        email: email,
+        password: password,
+      );
+
+      if (response.user != null) {
+        // Sign-up success
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Account created successfully! Please check your email to confirm.')),
+        );
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => LoginPage()),
+        );
+      } else if (response.error != null) {
+        // Handle error
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${response.error!.message}')),
+        );
+      }
+    } on AuthException catch (e) {
+      // Catch authentication-related errors
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: ${e.message}')),
+      );
+    } finally {
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -21,7 +67,7 @@ class _SignUpPageState extends State<SignUpPage> {
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFF006400), Color(0xFFB0E57C)], // Blue to Cyan Gradient
+            colors: [Color(0xFF006400), Color(0xFFB0E57C)],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
           ),
@@ -65,17 +111,15 @@ class _SignUpPageState extends State<SignUpPage> {
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
-                          onPressed: () {
-                            if (_formKey.currentState!.validate()) {
-                              // Handle signup logic
-                            }
-                          },
+                          onPressed: isLoading ? null : signUp,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF008000), // Dark Blue
+                            backgroundColor: const Color(0xFF008000),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             padding: const EdgeInsets.symmetric(vertical: 15),
                           ),
-                          child: const Text("Sign Up", style: TextStyle(fontSize: 18, color: Colors.white)),
+                          child: isLoading
+                              ? const CircularProgressIndicator(color: Colors.white)
+                              : const Text("Sign Up", style: TextStyle(fontSize: 18, color: Colors.white)),
                         ),
                       ),
                       const SizedBox(height: 15),
