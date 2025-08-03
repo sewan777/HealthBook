@@ -286,10 +286,11 @@ class _HealthAppHomeState extends State<HealthAppHome> {
     }
   }
 
-  Future<void> _selectImage() async {
+  // Updated method to handle image selection from specific source
+  Future<void> _selectImageFromSource(ImageSource source) async {
     try {
       final XFile? image = await _picker.pickImage(
-        source: ImageSource.gallery,
+        source: source,
         maxWidth: 800,
         maxHeight: 600,
         imageQuality: 85,
@@ -307,6 +308,64 @@ class _HealthAppHomeState extends State<HealthAppHome> {
         );
       }
     }
+  }
+
+  // Method to show image source selection dialog
+  void _showImageSourceDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text(
+            'Select Image Source',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          content: const Text('Choose how you want to add a photo to your meal:'),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(15),
+          ),
+          actions: [
+            // Camera option
+            TextButton.icon(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _selectImageFromSource(ImageSource.camera);
+              },
+              icon: const Icon(Icons.camera_alt, color: Colors.blue),
+              label: const Text(
+                'Camera',
+                style: TextStyle(color: Colors.blue, fontSize: 16),
+              ),
+            ),
+            // Gallery option
+            TextButton.icon(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _selectImageFromSource(ImageSource.gallery);
+              },
+              icon: const Icon(Icons.photo_library, color: Colors.green),
+              label: const Text(
+                'Gallery',
+                style: TextStyle(color: Colors.green, fontSize: 16),
+              ),
+            ),
+            // Cancel option
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(color: Colors.grey, fontSize: 16),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Legacy method for backward compatibility
+  Future<void> _selectImage() async {
+    _showImageSourceDialog();
   }
 
   Widget _buildCalendarSection() {
@@ -379,6 +438,7 @@ class _HealthAppHomeState extends State<HealthAppHome> {
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
             const Text("Add New Meal", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 15),
@@ -436,29 +496,48 @@ class _HealthAppHomeState extends State<HealthAppHome> {
               ),
             ),
             const SizedBox(height: 10),
-            Row(
-              children: [
-                ElevatedButton.icon(
-                  onPressed: _selectImage,
-                  icon: const Icon(Icons.camera_alt),
-                  label: const Text("Add Photo"),
-                ),
-                if (_selectedImage != null) ...[
+            // Show selected image preview only
+            if (_selectedImage != null) ...[
+              Row(
+                children: [
+                  const Text(
+                    "Selected Photo:",
+                    style: TextStyle(fontWeight: FontWeight.w500),
+                  ),
                   const SizedBox(width: 10),
                   Container(
-                    width: 50,
-                    height: 50,
+                    width: 60,
+                    height: 60,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.green, width: 2),
                       image: DecorationImage(
                         image: FileImage(_selectedImage!),
                         fit: BoxFit.cover,
                       ),
                     ),
                   ),
+                  const SizedBox(width: 10),
+                  // Remove image button
+                  IconButton(
+                    onPressed: () {
+                      setState(() {
+                        _selectedImage = null;
+                      });
+                    },
+                    icon: const Icon(Icons.close),
+                    iconSize: 20,
+                    color: Colors.red,
+                    tooltip: 'Remove Photo',
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.red.shade50,
+                      shape: const CircleBorder(),
+                    ),
+                  ),
                 ],
-              ],
-            ),
+              ),
+              const SizedBox(height: 10),
+            ],
             const SizedBox(height: 15),
             SizedBox(
               width: double.infinity,
@@ -481,13 +560,15 @@ class _HealthAppHomeState extends State<HealthAppHome> {
 
   Widget _buildMealLogs() {
     if (_isLoading) {
-      return const Expanded(
+      return const SizedBox(
+        height: 200,
         child: Center(child: CircularProgressIndicator()),
       );
     }
 
     if (_mealLogs.isEmpty) {
-      return const Expanded(
+      return const SizedBox(
+        height: 200,
         child: Center(
           child: Text(
             "No meals logged for this date.\nAdd your first meal!",
@@ -498,55 +579,55 @@ class _HealthAppHomeState extends State<HealthAppHome> {
       );
     }
 
-    return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            "Meals for ${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}",
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 10),
-          Expanded(
-            child: ListView.builder(
-              itemCount: _mealLogs.length,
-              itemBuilder: (context, index) {
-                final meal = _mealLogs[index];
-                return Card(
-                  margin: const EdgeInsets.symmetric(vertical: 5),
-                  child: ListTile(
-                    leading: meal.image != null
-                        ? ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.file(
-                        meal.image!,
-                        width: 50,
-                        height: 50,
-                        fit: BoxFit.cover,
-                      ),
-                    )
-                        : const CircleAvatar(
-                      backgroundColor: Colors.green,
-                      child: Icon(Icons.fastfood, color: Colors.white),
-                    ),
-                    title: Text(
-                      meal.name,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: Text(
-                      "Weight: ${meal.weight}g\nCalories: ${meal.calories}\nTime: ${_formatTime(meal.consumedTime)}",
-                    ),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete, color: Colors.red),
-                      onPressed: () => _showDeleteConfirmation(index),
-                    ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          "Meals for ${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}",
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 10),
+        // Use ListView.builder with shrinkWrap and physics to make it scrollable within SingleChildScrollView
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: _mealLogs.length,
+          itemBuilder: (context, index) {
+            final meal = _mealLogs[index];
+            return Card(
+              margin: const EdgeInsets.symmetric(vertical: 5),
+              child: ListTile(
+                leading: meal.image != null
+                    ? ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.file(
+                    meal.image!,
+                    width: 50,
+                    height: 50,
+                    fit: BoxFit.cover,
                   ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
+                )
+                    : const CircleAvatar(
+                  backgroundColor: Colors.green,
+                  child: Icon(Icons.fastfood, color: Colors.white),
+                ),
+                title: Text(
+                  meal.name,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                subtitle: Text(
+                  "Weight: ${meal.weight}g\nCalories: ${meal.calories}\nTime: ${_formatTime(meal.consumedTime)}",
+                ),
+                trailing: IconButton(
+                  icon: const Icon(Icons.delete, color: Colors.red),
+                  onPressed: () => _showDeleteConfirmation(index),
+                ),
+              ),
+            );
+          },
+        ),
+      ],
     );
   }
 
@@ -594,8 +675,8 @@ class _HealthAppHomeState extends State<HealthAppHome> {
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.only(left: 20, right: 20, top: 20, bottom: 100),
         child: Column(
           children: [
             _buildCalendarSection(),
@@ -606,6 +687,91 @@ class _HealthAppHomeState extends State<HealthAppHome> {
             const SizedBox(height: 20),
             _buildMealLogs(),
           ],
+        ),
+      ),
+      bottomNavigationBar: BottomAppBar(
+        height: 80,
+        color: Colors.white,
+        elevation: 8,
+        shape: const CircularNotchedRectangle(),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              // Home icon
+              IconButton(
+                onPressed: () {
+                  // Already on home page
+                },
+                icon: const Icon(Icons.home),
+                iconSize: 28,
+                color: Colors.green.shade700,
+                tooltip: 'Home',
+              ),
+              // Calendar icon
+              IconButton(
+                onPressed: () => _selectDate(context),
+                icon: const Icon(Icons.calendar_today),
+                iconSize: 28,
+                color: Colors.grey.shade600,
+                tooltip: 'Select Date',
+              ),
+              // Camera button - main focal point
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.pink.shade400, Colors.orange.shade400],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.pink.shade200,
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: IconButton(
+                  onPressed: _showImageSourceDialog,
+                  icon: const Icon(Icons.camera_alt),
+                  iconSize: 30,
+                  color: Colors.white,
+                  tooltip: 'Add Photo',
+                ),
+              ),
+              // Stats/Analytics icon
+              IconButton(
+                onPressed: () {
+                  // Could navigate to analytics page
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Analytics feature coming soon!')),
+                  );
+                },
+                icon: const Icon(Icons.analytics),
+                iconSize: 28,
+                color: Colors.grey.shade600,
+                tooltip: 'Analytics',
+              ),
+              // Profile icon
+              IconButton(
+                onPressed: () {
+                  // Could navigate to profile page
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Profile feature coming soon!')),
+                  );
+                },
+                icon: const Icon(Icons.person),
+                iconSize: 28,
+                color: Colors.grey.shade600,
+                tooltip: 'Profile',
+              ),
+            ],
+          ),
         ),
       ),
     );
