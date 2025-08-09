@@ -1,16 +1,25 @@
-# health
+📒 HealthBook
+HealthBook is a Flutter-based mobile application that helps users track their daily meals, calorie intake, and food photos.
+The app is built with Supabase for backend storage and authentication, offering a smooth and secure experience.
 
-A new Flutter project.
+✨ Features
+📸 Meal Tracking with Photos – Capture and upload meal photos directly from your phone.
 
-## Getting Started
+🍽 Calorie Logging – Record calories for each meal to monitor daily intake.
 
-This project is a starting point for a Flutter application.
+📊 Daily Summary – View total calories consumed each day.
 
-A few resources to get you started if this is your first Flutter project:
+🔐 Secure Authentication – Sign up, log in, and manage accounts using Supabase Auth.
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+☁ Cloud Storage – All images and meal data are stored securely in Supabase Storage.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+📅 Calendar View – Easily check past meals and calorie logs.
+
+🔮 Future Improvements
+AI-powered calorie estimation from food photos
+
+Nutrient breakdown (carbs, proteins, fats)
+
+Meal recommendations based on goals
+
+Offline mode
