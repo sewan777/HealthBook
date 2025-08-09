@@ -13,7 +13,13 @@ The app is built with Supabase for backend storage and authentication, offering 
 
 ☁ Cloud Storage – All images and meal data are stored securely in Supabase Storage.
 
-📅 Calendar View – Easily check past meals and calorie logs.
+📅 Calendar 
+View – Easily check past meals and calorie logs.
+SCREENSHOTS
+<img width="1344" height="2992" alt="1" src="https://github.com/user-attachments/assets/13c8f251-0360-40be-84e8-d49384f428de" />
+<img width="1344" height="2992" alt="2" src="https://github.com/user-attachments/assets/5788e762-6800-49a7-a098-31f167e85ede" />
+<img width="1344" height="2992" alt="3" src="https://github.com/user-attachments/assets/601836b3-685b-4472-a0f8-0136201c0177" />
+<img width="1344" height="2992" alt="4" src="https://github.com/user-attachments/assets/9c7b49e2-642b-4812-9ba9-ca91d6312b41" />
 
 🔮 Future Improvements
 AI-powered calorie estimation from food photos
