@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'login.dart';
 
 class HealthApp extends StatelessWidget {
@@ -11,12 +13,72 @@ class HealthApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
+      theme: ThemeData(a
         primarySwatch: Colors.green,
         visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
       home: const HealthAppHome(),
     );
+  }
+}
+
+class FoodApiService {
+  static const String baseUrl = 'https://api.nal.usda.gov/fdc/v1';
+  static const String apiKey = 'DEMO_KEY'; // You can use DEMO_KEY for testing or get your own free API key
+
+  static Future<List<FoodItem>> searchFood(String query) async {
+    if (query.trim().isEmpty) return [];
+
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/foods/search?api_key=$apiKey&query=${Uri.encodeComponent(query)}&pageSize=10'),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final foods = data['foods'] as List;
+
+        return foods.map<FoodItem>((food) {
+          // Extract calories per 100g from nutrients
+          double caloriesPer100g = 0;
+          if (food['foodNutrients'] != null) {
+            for (var nutrient in food['foodNutrients']) {
+              if (nutrient['nutrientName']?.toString().toLowerCase().contains('energy') == true ||
+                  nutrient['nutrientNumber'] == 208) { // Energy nutrient number
+                caloriesPer100g = (nutrient['value'] ?? 0).toDouble();
+                break;
+              }
+            }
+          }
+
+          return FoodItem(
+            name: food['description'] ?? 'Unknown Food',
+            caloriesPer100g: caloriesPer100g,
+            fdcId: food['fdcId']?.toString() ?? '',
+          );
+        }).where((item) => item.caloriesPer100g > 0).toList();
+      } else {
+        throw Exception('Failed to search foods: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Error searching foods: $e');
+    }
+  }
+}
+
+class FoodItem {
+  final String name;
+  final double caloriesPer100g;
+  final String fdcId;
+
+  FoodItem({
+    required this.name,
+    required this.caloriesPer100g,
+    required this.fdcId,
+  });
+
+  int calculateCalories(double weightInGrams) {
+    return ((caloriesPer100g * weightInGrams) / 100).round();
   }
 }
 
@@ -87,11 +149,21 @@ class _HealthAppHomeState extends State<HealthAppHome> {
   bool _isCalorieInputEnabled = false;
   bool _isLoading = false;
 
+  // New variables for API integration
+  List<FoodItem> _foodSuggestions = [];
+  FoodItem? _selectedFood;
+  bool _isSearchingFood = false;
+  int _calculatedCalories = 0;
+
   @override
   void initState() {
     super.initState();
     _timeController.text = _formatTime(DateTime.now());
     _loadMealsForDate();
+
+    // Listen to food name changes for API search
+    _nameController.addListener(_onFoodNameChanged);
+    _weightController.addListener(_onWeightChanged);
   }
 
   @override
@@ -101,6 +173,74 @@ class _HealthAppHomeState extends State<HealthAppHome> {
     _calorieController.dispose();
     _timeController.dispose();
     super.dispose();
+  }
+
+  void _onFoodNameChanged() {
+    final query = _nameController.text.trim();
+    if (query.isNotEmpty && query.length >= 3) {
+      _searchFood(query);
+    } else {
+      setState(() {
+        _foodSuggestions.clear();
+        _selectedFood = null;
+        _calculatedCalories = 0;
+      });
+    }
+  }
+
+  void _onWeightChanged() {
+    if (_selectedFood != null) {
+      final weight = double.tryParse(_weightController.text) ?? 0;
+      if (weight > 0) {
+        setState(() {
+          _calculatedCalories = _selectedFood!.calculateCalories(weight);
+        });
+      } else {
+        setState(() {
+          _calculatedCalories = 0;
+        });
+      }
+    }
+  }
+
+  Future<void> _searchFood(String query) async {
+    setState(() {
+      _isSearchingFood = true;
+    });
+
+    try {
+      final foods = await FoodApiService.searchFood(query);
+      if (mounted) {
+        setState(() {
+          _foodSuggestions = foods;
+          _isSearchingFood = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isSearchingFood = false;
+          _foodSuggestions.clear();
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error searching food: $e')),
+        );
+      }
+    }
+  }
+
+  void _selectFood(FoodItem food) {
+    setState(() {
+      _selectedFood = food;
+      _nameController.text = food.name;
+      _foodSuggestions.clear();
+
+      // Calculate calories if weight is already entered
+      final weight = double.tryParse(_weightController.text) ?? 0;
+      if (weight > 0) {
+        _calculatedCalories = food.calculateCalories(weight);
+      }
+    });
   }
 
   String _formatTime(DateTime dateTime) {
@@ -147,7 +287,7 @@ class _HealthAppHomeState extends State<HealthAppHome> {
   Future<void> _addMeal() async {
     String name = _nameController.text.trim();
     double weight = double.tryParse(_weightController.text) ?? 0;
-    int calories = _isCalorieInputEnabled ? int.tryParse(_calorieController.text) ?? 0 : 0;
+    int calories;
 
     if (name.isEmpty || weight <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -156,9 +296,20 @@ class _HealthAppHomeState extends State<HealthAppHome> {
       return;
     }
 
-    if (_isCalorieInputEnabled && calories <= 0) {
+    // Use calculated calories if available, otherwise use manual input
+    if (!_isCalorieInputEnabled && _calculatedCalories > 0) {
+      calories = _calculatedCalories;
+    } else if (_isCalorieInputEnabled) {
+      calories = int.tryParse(_calorieController.text) ?? 0;
+      if (calories <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enter valid calories')),
+        );
+        return;
+      }
+    } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter valid calories')),
+        const SnackBar(content: Text('Could not calculate calories automatically. Please enable manual calorie input.')),
       );
       return;
     }
@@ -224,6 +375,9 @@ class _HealthAppHomeState extends State<HealthAppHome> {
       _calorieController.clear();
       _timeController.text = _formatTime(DateTime.now());
       _selectedImage = null;
+      _selectedFood = null;
+      _calculatedCalories = 0;
+      _foodSuggestions.clear();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -286,7 +440,6 @@ class _HealthAppHomeState extends State<HealthAppHome> {
     }
   }
 
-  // Updated method to handle image selection from specific source
   Future<void> _selectImageFromSource(ImageSource source) async {
     try {
       final XFile? image = await _picker.pickImage(
@@ -310,7 +463,6 @@ class _HealthAppHomeState extends State<HealthAppHome> {
     }
   }
 
-  // Method to show image source selection dialog
   void _showImageSourceDialog() {
     showDialog(
       context: context,
@@ -325,7 +477,6 @@ class _HealthAppHomeState extends State<HealthAppHome> {
             borderRadius: BorderRadius.circular(15),
           ),
           actions: [
-            // Camera option
             TextButton.icon(
               onPressed: () {
                 Navigator.of(context).pop();
@@ -337,7 +488,6 @@ class _HealthAppHomeState extends State<HealthAppHome> {
                 style: TextStyle(color: Colors.blue, fontSize: 16),
               ),
             ),
-            // Gallery option
             TextButton.icon(
               onPressed: () {
                 Navigator.of(context).pop();
@@ -349,7 +499,6 @@ class _HealthAppHomeState extends State<HealthAppHome> {
                 style: TextStyle(color: Colors.green, fontSize: 16),
               ),
             ),
-            // Cancel option
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
               child: const Text(
@@ -363,7 +512,6 @@ class _HealthAppHomeState extends State<HealthAppHome> {
     );
   }
 
-  // Legacy method for backward compatibility
   Future<void> _selectImage() async {
     _showImageSourceDialog();
   }
@@ -442,14 +590,63 @@ class _HealthAppHomeState extends State<HealthAppHome> {
           children: [
             const Text("Add New Meal", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 15),
-            TextField(
-              controller: _nameController,
-              decoration: const InputDecoration(
-                labelText: "Meal Name",
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.fastfood),
-              ),
+
+            // Food name field with suggestions
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: _nameController,
+                  decoration: InputDecoration(
+                    labelText: "Meal Name",
+                    border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.fastfood),
+                    suffixIcon: _isSearchingFood
+                        ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: Padding(
+                        padding: EdgeInsets.all(12.0),
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                        : null,
+                  ),
+                ),
+
+                // Food suggestions dropdown
+                if (_foodSuggestions.isNotEmpty) ...[
+                  const SizedBox(height: 5),
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: _foodSuggestions.length > 5 ? 5 : _foodSuggestions.length,
+                      itemBuilder: (context, index) {
+                        final food = _foodSuggestions[index];
+                        return ListTile(
+                          dense: true,
+                          title: Text(
+                            food.name,
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                          subtitle: Text(
+                            '${food.caloriesPer100g.toStringAsFixed(1)} cal/100g',
+                            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                          ),
+                          onTap: () => _selectFood(food),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ],
             ),
+
             const SizedBox(height: 10),
             TextField(
               controller: _weightController,
@@ -460,6 +657,33 @@ class _HealthAppHomeState extends State<HealthAppHome> {
               ),
               keyboardType: TextInputType.number,
             ),
+
+            // Show calculated calories
+            if (_calculatedCalories > 0) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.green.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.calculate, color: Colors.green.shade700),
+                    const SizedBox(width: 8),
+                    Text(
+                      "Estimated Calories: $_calculatedCalories kcal",
+                      style: TextStyle(
+                        color: Colors.green.shade700,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
             const SizedBox(height: 10),
             Row(
               children: [
@@ -496,7 +720,8 @@ class _HealthAppHomeState extends State<HealthAppHome> {
               ),
             ),
             const SizedBox(height: 10),
-            // Show selected image preview only
+
+            // Show selected image preview
             if (_selectedImage != null) ...[
               Row(
                 children: [
@@ -518,7 +743,6 @@ class _HealthAppHomeState extends State<HealthAppHome> {
                     ),
                   ),
                   const SizedBox(width: 10),
-                  // Remove image button
                   IconButton(
                     onPressed: () {
                       setState(() {
@@ -588,7 +812,6 @@ class _HealthAppHomeState extends State<HealthAppHome> {
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 10),
-        // Use ListView.builder with shrinkWrap and physics to make it scrollable within SingleChildScrollView
         ListView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -699,17 +922,13 @@ class _HealthAppHomeState extends State<HealthAppHome> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              // Home icon
               IconButton(
-                onPressed: () {
-                  // Already on home page
-                },
+                onPressed: () {},
                 icon: const Icon(Icons.home),
                 iconSize: 28,
                 color: Colors.green.shade700,
                 tooltip: 'Home',
               ),
-              // Calendar icon
               IconButton(
                 onPressed: () => _selectDate(context),
                 icon: const Icon(Icons.calendar_today),
@@ -717,7 +936,6 @@ class _HealthAppHomeState extends State<HealthAppHome> {
                 color: Colors.grey.shade600,
                 tooltip: 'Select Date',
               ),
-              // Camera button - main focal point
               Container(
                 width: 56,
                 height: 56,
@@ -744,10 +962,8 @@ class _HealthAppHomeState extends State<HealthAppHome> {
                   tooltip: 'Add Photo',
                 ),
               ),
-              // Stats/Analytics icon
               IconButton(
                 onPressed: () {
-                  // Could navigate to analytics page
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Analytics feature coming soon!')),
                   );
@@ -757,10 +973,8 @@ class _HealthAppHomeState extends State<HealthAppHome> {
                 color: Colors.grey.shade600,
                 tooltip: 'Analytics',
               ),
-              // Profile icon
               IconButton(
                 onPressed: () {
-                  // Could navigate to profile page
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Profile feature coming soon!')),
                   );
