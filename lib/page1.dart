@@ -13,7 +13,7 @@ class HealthApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(a
+      theme: ThemeData(
         primarySwatch: Colors.green,
         visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
@@ -24,7 +24,7 @@ class HealthApp extends StatelessWidget {
 
 class FoodApiService {
   static const String baseUrl = 'https://api.nal.usda.gov/fdc/v1';
-  static const String apiKey = 'DEMO_KEY'; // You can use DEMO_KEY for testing or get your own free API key
+  static const String apiKey = '9bTqtDZkbwnUprdSXmtiqMc9ikJX6NnYH70jAvE9'; // You can use DEMO_KEY for testing or get your own free API key
 
   static Future<List<FoodItem>> searchFood(String query) async {
     if (query.trim().isEmpty) return [];
