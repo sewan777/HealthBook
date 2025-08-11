@@ -113,19 +113,30 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
-      // Call resetPasswordForEmail with your app's deep link or web redirect
+      // Use the web page URL for password reset
       await supabase.auth.resetPasswordForEmail(
         email,
-        redirectTo: 'https://your-app.com/reset-password', // Replace with your actual redirect URL
+        redirectTo: 'https://your-domain.com/password_reset.html', // Replace with your hosted web page URL
       );
 
       // If no error occurs, show a success message
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Password reset email sent to $email!'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Password reset email sent to $email!'),
+                const SizedBox(height: 5),
+                const Text(
+                  'Check your email and click the link to reset your password.',
+                  style: TextStyle(fontSize: 12),
+                ),
+              ],
+            ),
             backgroundColor: Colors.green,
-            duration: const Duration(seconds: 4),
+            duration: const Duration(seconds: 6),
           ),
         );
       }
